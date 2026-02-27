@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: study-platform
+
+  # ==========================================
+  # 1. MySQL 数据库配置
+  # ==========================================
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 建议使用 127.0.0.1 替代 localhost，连接更稳定
+    url: jdbc:mysql://127.0.0.1:3306/study-platform?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: Goodluck0808.
+
+  # ==========================================
+  # 2. OpenSearch (Elasticsearch) 配置
+  # ==========================================
+  # 注意：Spring Boot 默认只认 spring.elasticsearch，不认 opensearch
+  elasticsearch:
+    uris: http://127.0.0.1:9200
+    connection-timeout: 10s
+    socket-timeout: 10s
+
+# ==========================================
+# 3. MyBatis Plus 配置
+# ==========================================
+mybatis-plus:
+  configuration:
+    # 开启控制台 SQL 日志打印 (开发环境推荐)
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 开启驼峰命名自动映射 (user_name -> userName)
+    map-underscore-to-camel-case: true
+  # 如果你有 XML 文件，请确保路径正确，没有则可以注释掉
+  # mapper-locations: classpath:mapper/*.xml
