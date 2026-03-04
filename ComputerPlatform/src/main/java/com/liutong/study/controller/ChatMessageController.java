@@ -1,6 +1,7 @@
 package com.liutong.study.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.liutong.study.common.Result;
 import com.liutong.study.entity.ChatMessage;
 import com.liutong.study.entity.User;
@@ -13,6 +14,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+
 
 /**
  * 聊天消息控制器
@@ -96,4 +101,30 @@ public class  ChatMessageController {
         boolean success = chatMessageService.save(message);
         return success ? Result.success("发送成功") : Result.error("发送失败");
     }
+
+    @GetMapping("/unreadCount")
+    public Result<Long> getUnreadCount(@RequestParam Long userId) {
+        QueryWrapper<ChatMessage> queryWrapper = new QueryWrapper<>();
+        // 查询条件：接收者是当前用户，且状态为 0（未读）
+        queryWrapper.eq("receiver_id", userId).eq("is_read", 0);
+
+        long count = chatMessageService.count(queryWrapper);
+        return Result.success(count);
+    }
+
+    /**
+     * 将该用户的所有未读消息标记为已读
+     */
+    @PostMapping("/markRead")
+    public Result<String> markRead(@RequestParam Long userId) {
+        UpdateWrapper<ChatMessage> updateWrapper = new UpdateWrapper<>();
+        // 条件：接收者是当前用户，且状态为未读(0)
+        updateWrapper.eq("receiver_id", userId).eq("is_read", 0);
+        // 修改为：已读(1)
+        updateWrapper.set("is_read", 1);
+
+        chatMessageService.update(updateWrapper);
+        return Result.success("消息已全部标记为已读");
+    }
+
 }
