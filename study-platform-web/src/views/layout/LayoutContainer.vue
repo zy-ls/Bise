@@ -31,6 +31,9 @@
           <el-menu-item index="/todo">
             <el-icon><DocumentChecked /></el-icon>待办计划
           </el-menu-item>
+          <el-menu-item index="/group/square">
+            <el-icon><ChatSquare /></el-icon>技术社区
+          </el-menu-item>
         </el-menu>
 
         <div class="user-actions">
@@ -82,6 +85,7 @@ import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ChatSquare } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -110,8 +114,9 @@ const handleCommand = (command) => {
       cancelButtonText: '取消 (Esc)',
       type: 'warning'
     }).then(() => {
-      userStore.removeToken() 
-      userStore.setUser({})   
+      // 👈 核心修改：使用你 store 里真实存在的 removeUser 方法
+      userStore.removeUser() 
+      
       router.push('/login')
       ElMessage.success('已断开连接')
     }).catch(() => {})

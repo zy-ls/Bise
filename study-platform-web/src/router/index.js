@@ -51,6 +51,16 @@ const router = createRouter({
           path: '/todo',
           name: 'todo',
           component: () => import('../views/todo/TodoView.vue')
+        },
+        {
+          path: '/group/square',
+          name: 'GroupSquare',
+          component: () => import('../views/group/GroupSquare.vue')
+        },
+        {
+          path: '/group/detail',
+          name: 'GroupDetail',
+          component: () => import('../views/group/GroupDetail.vue')
         }
       ]
     }
