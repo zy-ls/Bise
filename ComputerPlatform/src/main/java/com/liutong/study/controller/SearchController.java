@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -27,22 +28,37 @@ public class SearchController {
     private IUserService userService;
 
     /**
-     * 🔍 搜索接口
+     * 🔍 极客风搜索接口 (支持关键字 + 分类组合过滤)
      */
     @GetMapping("/note")
-    public Result<List<NoteDoc>> searchNote(@RequestParam(required = false) String keyword) {
-        if (keyword == null || keyword.trim().isEmpty()) {
-            return Result.success(new ArrayList<>());
-        }
+    public Result<List<NoteDoc>> searchNote(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId) {
 
-        // 🟢 调用上面改回来的标准方法
-        // 此时 OpenSearch 会把 "驱蚊" 拆成 "驱" 和 "蚊" 去库里找，就能找到了！
-        List<NoteDoc> list = noteSearchRepository.findByTitleOrContent(keyword, keyword);
+        List<NoteDoc> list = new ArrayList<>();
+
+        // 场景 1：既有关键字，又有分类
+        if (keyword != null && !keyword.trim().isEmpty() && categoryId != null) {
+            // 先通过搜索引擎查出所有相关关键字的笔记，再在内存里精准过滤分类
+            List<NoteDoc> searchResult = noteSearchRepository.findByTitleMatchesOrContentMatchesOrTagsMatches(keyword, keyword, keyword);
+            list = searchResult.stream()
+                    .filter(doc -> categoryId.equals(doc.getCategoryId()))
+                    .collect(Collectors.toList());
+        }
+        // 场景 2：只有关键字，没有分类 (全局搜索)
+        else if (keyword != null && !keyword.trim().isEmpty()) {
+            list = noteSearchRepository.findByTitleMatchesOrContentMatchesOrTagsMatches(keyword, keyword, keyword);
+        }
+        // 场景 3：只有分类，没有关键字 (点击左侧菜单)
+        else if (categoryId != null) {
+            list = noteSearchRepository.findByCategoryId(categoryId);
+        }
 
         return Result.success(list);
     }
+
     /**
-     * 🔄 同步接口
+     * 🔄 全量同步接口
      */
     @RequestMapping(value = "/sync", method = {RequestMethod.GET, RequestMethod.POST})
     public Result<String> syncAll() {
@@ -51,9 +67,7 @@ public class SearchController {
         List<NoteDoc> docs = new ArrayList<>();
         for (Info info : allNotes) {
 
-            // 🛑🛑🛑 核心修正点在这里 🛑🛑🛑
-            // 之前是 != 1 (导致已发布的进不去)
-            // 现在改为 != 2 (只允许 status=2 已发布的笔记进入)
+            // 🛑 核心修正：严格限制只有 status = 2 (已发布) 的笔记才能进搜索引擎
             if (info.getStatus() != 2) {
                 continue;
             }
@@ -61,6 +75,10 @@ public class SearchController {
             NoteDoc doc = new NoteDoc();
             doc.setId(info.getNoteId());
             doc.setTitle(info.getTitle());
+
+            // 👇 新增：同步分类和标签数据
+            doc.setCategoryId(info.getCategoryId());
+            doc.setTags(info.getTags());
 
             String contentHtml = info.getContentHtml();
             if (contentHtml != null) {

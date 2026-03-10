@@ -76,39 +76,36 @@ public class InfoController {
 
     /**
      * 🆕 新增接口：发布/保存笔记
-     * API: POST /note-info/save
      */
     @PostMapping("/save")
     public Result<String> saveNote(@RequestBody Info info) {
-        // 1. 简单的参数校验
         if (info.getTitle() == null || info.getContentHtml() == null) {
             return Result.error("标题和内容不能为空");
         }
 
-        // 2. 【关键一步】从 HTML 中提取纯文本
-        // 为什么要做这步？为了以后 OpenSearch 搜索做准备！
         String plainText = HtmlUtil.cleanHtmlTag(info.getContentHtml());
         info.setContentText(plainText);
 
-        // 3. 自动生成摘要 (取前100字)
         if (plainText != null && plainText.length() > 100) {
             info.setSummary(plainText.substring(0, 100) + "...");
         } else {
             info.setSummary(plainText);
         }
 
-        // 4. 保存到数据库
-        // saveOrUpdate: 如果 info 里有 ID 就更新，没 ID 就新增
         boolean success = infoService.saveOrUpdate(info);
 
-        // 👇👇👇 新增同步逻辑 👇👇👇
-        if (success && info.getStatus() == 1) {
+        // 🛑 致命 Bug 修复：这里必须是 status == 2 才能同步到搜索引擎！
+        if (success && info.getStatus() == 2) {
             try {
                 com.liutong.study.entity.NoteDoc doc = new com.liutong.study.entity.NoteDoc();
                 doc.setId(info.getNoteId());
                 doc.setTitle(info.getTitle());
-                // 去除 HTML 标签
                 doc.setContent(info.getContentHtml().replaceAll("<[^>]*>", ""));
+
+                // 👇 新增：将分类和标签一起丢进搜索引擎
+                doc.setCategoryId(info.getCategoryId());
+                doc.setTags(info.getTags());
+
                 doc.setCreateTime(System.currentTimeMillis());
 
                 User user = userService.getById(info.getUserId());
@@ -116,40 +113,44 @@ public class InfoController {
                     doc.setAuthorName(user.getNickname());
                     doc.setAuthorAvatar(user.getAvatar());
                 }
-                noteSearchRepository.save(doc); // 保存到 OpenSearch
+                noteSearchRepository.save(doc);
             } catch (Exception e) {
-                e.printStackTrace(); // 搜索挂了别影响发笔记
+                e.printStackTrace();
             }
         }
-        // 👆👆👆 结束 👆👆👆
 
-        return success ? Result.success("发布成功") : Result.error("发布失败");
+        return success ? Result.success("操作成功") : Result.error("操作失败");
     }
 
 
+    /**
+     * 获取公开笔记列表 (默认数据源)
+     * 👇 改造点：支持接收 categoryId 参数
+     */
     @GetMapping("/list")
-    public Result<List<Info>> getAllNotes() {
+    public Result<List<Info>> getAllNotes(@RequestParam(required = false) Long categoryId) {
         QueryWrapper<Info> wrapper = new QueryWrapper<>();
 
+        // 必须是已发布的笔记
         wrapper.eq("status", 2);
+
+        // 👇 改造点：如果前端传了分类ID，就进行过滤
+        if (categoryId != null) {
+            wrapper.eq("category_id", categoryId);
+        }
 
         wrapper.orderByDesc("create_time");
 
         List<Info> list = infoService.list(wrapper);
 
-        // 填充作者信息
         for (Info info : list) {
             User user = userService.getById(info.getUserId());
             if (user != null) {
-                // 使用我们在第一步加的临时字段
                 info.setAuthorName(user.getNickname() != null ? user.getNickname() : user.getUsername());
                 info.setAuthorAvatar(user.getAvatar());
             } else {
-                info.setAuthorName("未知用户");
+                info.setAuthorName("未知极客");
             }
-
-            // 为了列表页显示美观，把很长的 HTML 内容截断一下，或者只给个摘要
-            // 这里我们偷个懒，前端来控制显示长度，后端照常返回
         }
         return Result.success(list);
     }

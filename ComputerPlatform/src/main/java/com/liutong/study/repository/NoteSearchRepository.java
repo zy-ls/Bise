@@ -9,9 +9,13 @@ import java.util.List;
 public interface NoteSearchRepository extends ElasticsearchRepository<NoteDoc, Long> {
 
     /**
-     * 🟢 改回标准匹配
-     * 不要用 Containing 了，直接用 TitleOrContent。
-     * 这会自动生成 Match Query，它知道怎么处理中文分词。
+     * 1. 关键字全局搜索 (标题 OR 内容 OR 标签)
+     * Matches 会自动调用你实体类里配置的 IK 分词器
      */
-    List<NoteDoc> findByTitleOrContent(String title, String content);
+    List<NoteDoc> findByTitleMatchesOrContentMatchesOrTagsMatches(String title, String content, String tags);
+
+    /**
+     * 2. 仅按分类精准查询 (当用户没有输入关键字，只点了左侧菜单时触发)
+     */
+    List<NoteDoc> findByCategoryId(Long categoryId);
 }
