@@ -22,6 +22,7 @@
           v-model:content="form.contentHtml" 
           contentType="html" 
           :toolbar="toolbarOptions" 
+          :modules="editorModules"
           style="height: 450px;" 
         />
       </div>
@@ -37,28 +38,41 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
+// 1. 引入刚才安装的图片缩放格式化插件
+import BlotFormatter from 'quill-blot-formatter'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const isReady = ref(false)
 
-// 🛠️ 定义工具栏配置：越全越好
+// 🛠️ 定义工具栏配置
 const toolbarOptions = [
-  ['bold', 'italic', 'underline', 'strike'],        // 加粗、斜体、下划线、删除线
-  ['blockquote', 'code-block'],                     // 引用、代码块
-  [{ 'header': 1 }, { 'header': 2 }],               // 标题 H1, H2
-  [{ 'list': 'ordered'}, { 'list': 'bullet' }],     // 列表
-  [{ 'script': 'sub'}, { 'script': 'super' }],      // 上标/下标
-  [{ 'indent': '-1'}, { 'indent': '+1' }],          // 缩进
-  [{ 'direction': 'rtl' }],                         // 文本方向
-  [{ 'size': ['small', false, 'large', 'huge'] }],  // 字体大小
-  [{ 'header': [1, 2, 3, 4, 5, 6, false] }],        // 标题下拉选择
-  [{ 'color': [] }, { 'background': [] }],          // 字体颜色、背景色
-  [{ 'font': [] }],                                 // 字体
-  [{ 'align': [] }],                                // 对齐方式
-  ['clean'],                                        // 清除格式
-  ['image']                                         // 图片上传 (默认是转Base64)
+  ['bold', 'italic', 'underline', 'strike'],
+  ['blockquote', 'code-block'],
+  [{ 'header': 1 }, { 'header': 2 }],
+  [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+  [{ 'script': 'sub'}, { 'script': 'super' }],
+  [{ 'indent': '-1'}, { 'indent': '+1' }],
+  [{ 'direction': 'rtl' }],
+  [{ 'size': ['small', false, 'large', 'huge'] }],
+  [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+  [{ 'color': [] }, { 'background': [] }],
+  [{ 'font': [] }],
+  [{ 'align': [] }],
+  ['clean'],
+  ['image']
+]
+
+// 2. 配置 Quill 的模块
+const editorModules = [
+  {
+    name: 'blotFormatter',
+    module: BlotFormatter,
+    options: {
+      // 可以在这里进行配置，默认即可启用图片缩放、拖拽和对齐
+    }
+  }
 ]
 
 const form = reactive({
@@ -130,6 +144,6 @@ const handleSave = () => {
 }
 .editor-wrapper {
   margin-top: 10px;
-  background-color: #fff; /* 防止背景透明 */
+  background-color: #fff;
 }
 </style>

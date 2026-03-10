@@ -204,10 +204,14 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.note-detail-container { max-width: 900px; margin: 0 auto; }
+/* 1. 扩大整体容器宽度，让排版更舒展 */
+.note-detail-container { 
+  max-width: 1200px; /* 从 900px 扩大到 1200px */
+  margin: 20px auto; /* 增加上下边距，让页面不那么贴边 */
+}
 
-.note-header { text-align: center; margin-bottom: 20px; }
-.title { margin: 0 0 15px 0; font-size: 24px; color: #333; }
+.note-header { text-align: center; margin-bottom: 30px; }
+.title { margin: 0 0 15px 0; font-size: 28px; color: #333; font-weight: bold; }
 
 .note-meta { 
   display: flex; 
@@ -215,13 +219,13 @@ onMounted(() => {
   align-items: center; 
   gap: 20px; 
   color: #999; 
-  font-size: 13px; 
+  font-size: 14px; 
 }
 
 .author-info {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
 }
 
 .author-name {
@@ -229,18 +233,30 @@ onMounted(() => {
   color: #555;
 }
 
+/* 2. 优化正文排版间距 */
 .note-content { 
-  min-height: 200px; 
-  padding: 10px; 
+  min-height: 300px; 
+  padding: 20px 40px; /* 增加左右内边距，像真正的文章一样 */
   font-size: 16px; 
-  line-height: 1.8; 
+  line-height: 2; /* 增大行高，提升阅读体验 */
   color: #333;
+  overflow-x: hidden; /* 防止内容过宽导致页面出现横向滚动条 */
 }
 
-/* 评论区样式 */
-.comment-section { margin-top: 40px; }
+/* 3. 核心修复：强制限制富文本内容中的图片大小 */
+:deep(.note-content img) {
+  max-width: 100%; /* 图片最大宽度不能超过外层容器 */
+  height: auto;    /* 高度自动等比缩放，防止图片变形 */
+  display: block;
+  margin: 15px auto; /* 图片居中显示，并增加上下间距 */
+  border-radius: 6px; /* 稍微加点圆角，更好看 */
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05); /* 加一点淡淡的阴影 */
+}
+
+/* 评论区样式保持或微调 */
+.comment-section { margin-top: 40px; padding: 0 20px; }
 .comment-item { padding: 15px 0; }
 .comment-user { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #666; margin-bottom: 8px; }
-.comment-content { padding-left: 40px; font-size: 15px; color: #333; line-height: 1.5; }
+.comment-content { padding-left: 40px; font-size: 15px; color: #333; line-height: 1.6; }
 .username { font-weight: 500; color: #409EFF; }
 </style>

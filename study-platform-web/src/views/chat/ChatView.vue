@@ -67,11 +67,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { useRoute } from 'vue-router' // 引入 useRoute
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-const route = useRoute() // 获取路由参数
+const route = useRoute()
 const userStore = useUserStore()
 const myUserId = userStore.user.userId
 
@@ -83,7 +83,18 @@ const msgListRef = ref(null)
 
 let timer = null 
 
-// 1. 获取联系人 (注意：改成了 async/await，为了等待数据返回)
+// 🔥 清除未读红点，并立刻通知导航栏刷新
+const clearUnreadDot = () => {
+  if (!myUserId) return;
+  axios.post(`http://localhost:8080/chat/markRead?userId=${myUserId}`)
+    .then(res => {
+      console.log('红点已清除')
+      // 👉 立刻广播全局事件，通知 LayoutContainer 刷新红点
+      window.dispatchEvent(new Event('refresh-unread'))
+    }).catch(err => console.error('清除红点失败', err))
+}
+
+// 1. 获取联系人
 const loadContacts = async () => {
   const res = await axios.get(`http://localhost:8080/chat/contacts?userId=${myUserId}`)
   if (res.data.code === 200) {
@@ -96,6 +107,7 @@ const selectUser = (user) => {
   currentChatUser.value = user
   loadHistory()
   scrollToBottom()
+  clearUnreadDot() 
 }
 
 // 3. 加载历史记录
@@ -135,10 +147,9 @@ const handleSend = () => {
         loadHistory() 
         scrollToBottom() 
         
-        // 发送成功后，如果这个人不在列表里（是新朋友），刷新一下列表
         const exist = contacts.value.find(u => u.userId === currentChatUser.value.userId)
         if (!exist) {
-          loadContacts() // 重新拉取列表，他就会出现在里面了
+          loadContacts() 
         }
       } else {
         ElMessage.error('发送失败')
@@ -154,38 +165,31 @@ const scrollToBottom = () => {
   })
 }
 
-// 🔥 核心修改：挂载逻辑
 onMounted(async () => {
-  // 1. 先加载已有的联系人
+  clearUnreadDot()
+
   await loadContacts()
 
-  // 2. 检查是不是从笔记页面跳过来的 (URL里有没有 targetId)
   const targetId = route.query.targetId
   if (targetId) {
-    // 2.1 看看这个人是不是已经是熟人了
     const existUser = contacts.value.find(u => u.userId == targetId)
-    
     if (existUser) {
-      // 如果是熟人，直接选中
       selectUser(existUser)
     } else {
-      // 2.2 如果是新朋友，需要去后台查一下他的头像和名字
       axios.get(`http://localhost:8080/sys-user/info/${targetId}`).then(res => {
         if (res.data.code === 200) {
           const newUser = res.data.data
-          // 临时把他加到列表最上面，方便我聊天
           contacts.value.unshift(newUser)
-          // 选中他
           selectUser(newUser)
         }
       })
     }
   }
 
-  // 3. 启动轮询
   timer = setInterval(() => {
     if (currentChatUser.value) {
       loadHistory()
+      clearUnreadDot() 
     }
   }, 1500)
 })
@@ -196,22 +200,19 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.chat-container { height: calc(100vh - 120px); } /* 减去顶部导航的高度 */
+.chat-container { height: calc(100vh - 120px); }
 .box-card { height: 100%; display: flex; flex-direction: column; }
-
 .chat-layout { display: flex; height: 600px; width: 100%; }
 
-/* 左侧样式 */
 .contact-list { width: 260px; border-right: 1px solid #eee; background-color: #f7f7f7; overflow-y: auto; }
 .list-header { padding: 15px; font-weight: bold; background: #fff; border-bottom: 1px solid #eee; }
 .contact-item { display: flex; align-items: center; padding: 12px; cursor: pointer; transition: 0.2s; border-bottom: 1px solid #f0f0f0;}
 .contact-item:hover { background-color: #e6f1fc; }
-.contact-item.active { background-color: #cce5ff; } /* 选中高亮 */
+.contact-item.active { background-color: #cce5ff; } 
 .contact-info { margin-left: 10px; }
 .contact-info .name { font-size: 14px; font-weight: 500; color: #333; }
 .contact-info .status-text { font-size: 12px; color: #999; }
 
-/* 右侧样式 */
 .chat-window { flex: 1; display: flex; flex-direction: column; background-color: #fff; }
 .chat-header { padding: 0 20px; height: 50px; line-height: 50px; border-bottom: 1px solid #eee; font-size: 15px; background-color: #fafafa;}
 
@@ -232,7 +233,6 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-/* 我发的消息：靠右，气泡变绿 */
 .my-message { flex-direction: row-reverse; }
 .my-message .bubble { background-color: #95ec69; }
 
