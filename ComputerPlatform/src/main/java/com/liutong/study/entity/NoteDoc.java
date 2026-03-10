@@ -29,4 +29,12 @@ public class NoteDoc {
 
     @Field(type = FieldType.Long)
     private Long createTime;
+
+    // 新增：用于根据分类精确过滤
+    @Field(type = FieldType.Long)
+    private Long categoryId;
+
+    // 新增：用于标签展示或搜索
+    @Field(type = FieldType.Keyword)
+    private String tags;
 }

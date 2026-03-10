@@ -27,6 +27,8 @@ public class Info implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private String tags;
+
     @TableId(value = "note_id", type = IdType.AUTO)
     private Long noteId;
 
