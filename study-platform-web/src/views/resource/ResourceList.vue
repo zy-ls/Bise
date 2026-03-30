@@ -1,145 +1,145 @@
 <template>
-  <div class="resource-container">
-    <el-card>
-      <template #header>
-        <div class="header-actions">
-          <span>📂 资料广场</span>
-          <el-button type="primary" icon="Upload" @click="dialogVisible = true">上传资料</el-button>
-        </div>
-      </template>
-
-      <el-table :data="tableData" style="width: 100%" v-loading="loading">
-        <el-table-column prop="fileName" label="文件名称" min-width="200">
-          <template #default="scope">
-            <el-icon><Document /></el-icon>
-            <span style="margin-left: 8px">{{ scope.row.fileName }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="fileSize" label="大小" width="120">
-          <template #default="scope">
-            {{ formatSize(scope.row.fileSize) }}
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="createTime" label="上传时间" width="180">
-          <template #default="scope">
-            {{ formatTime(scope.row.createTime) }}
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="downloadCount" label="下载热度" width="100" align="center" />
-
-        <el-table-column label="操作" width="120">
-          <template #default="scope">
-            <el-button type="primary" link icon="Download" @click="handleDownload(scope.row)">
-              下载
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <el-dialog v-model="dialogVisible" title="上传新资料" width="400px">
-      <el-upload
-        class="upload-demo"
-        drag
-        :action="uploadUrl"
-        :data="{ userId: userStore.user.userId }" 
-        :on-success="handleUploadSuccess"
-        :on-error="handleUploadError"
-        :show-file-list="false"
-      >
-        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">
-          拖拽文件到这里 或 <em>点击上传</em>
-        </div>
-        <template #tip>
-          <div class="el-upload__tip">
-            支持 PDF, Word, PPT 等格式，文件大小不超过 50MB
+  <div class="literature-container">
+    
+    <div class="banner-section" v-if="bannerList.length > 0">
+      <el-carousel :interval="4000" type="card" height="300px" trigger="click">
+        <el-carousel-item v-for="item in bannerList" :key="item.id">
+          <div class="carousel-content" @click="goTarget(item.targetUrl)">
+            <img :src="item.imgUrl" class="carousel-img" />
+            <div class="carousel-title" v-if="item.title">{{ item.title }}</div>
           </div>
-        </template>
-      </el-upload>
-    </el-dialog>
+        </el-carousel-item>
+      </el-carousel>
+    </div>
+
+    <div class="square-header">
+      <h1 class="page-title">
+        <span class="prompt">>_</span> Literature & Resources 
+        <span class="blink">_</span>
+      </h1>
+      <div class="search-box">
+        <el-input 
+          v-model="searchKeyword" 
+          placeholder="Enter keyword to search resources..." 
+          class="geek-search-input"
+          @keyup.enter="searchResources"
+        >
+          <template #append>
+            <el-button @click="searchResources"><el-icon><Search /></el-icon></el-button>
+          </template>
+        </el-input>
+      </div>
+    </div>
+
+    <div class="resource-list-area">
+      <el-empty v-if="resourceList.length === 0" description="System Info: 官方资源库暂无数据" />
+      <div class="resource-grid" v-else>
+        <div class="resource-card" v-for="res in resourceList" :key="res.id">
+           <h3>{{ res.title }}</h3>
+           <p class="desc">{{ res.description }}</p>
+           
+           <div class="card-footer">
+             <span class="date-text">Posted: {{ formatDate(res.createTime) }}</span>
+             <el-button type="primary" size="small" plain @click="goTarget(res.targetUrl)">
+               阅读文献
+             </el-button>
+           </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
-import { useUserStore } from '@/stores/user'
-import { ElMessage } from 'element-plus'
-import { Document, UploadFilled } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 
-const userStore = useUserStore()
-const tableData = ref([])
-const loading = ref(false)
-const dialogVisible = ref(false)
+const router = useRouter()
 
-// 上传接口地址
-const uploadUrl = 'http://localhost:8080/resource/upload'
-
-// 获取列表
-const fetchList = () => {
-  loading.value = true
-  axios.get('http://localhost:8080/resource/list')
-    .then(res => {
-      if (res.data.code === 200) {
-        tableData.value = res.data.data
-      }
-    })
-    .finally(() => {
-      loading.value = false
-    })
+// ================= 1. 轮播图加载逻辑 =================
+const bannerList = ref([])
+const loadActiveBanners = async () => {
+  const res = await axios.get('http://localhost:8080/banner/list?status=1')
+  if (res.data.code === 200) bannerList.value = res.data.data
 }
 
-// 下载文件
-const handleDownload = (row) => {
-  // 直接通过浏览器打开下载链接
-  const url = `http://localhost:8080/resource/download/${row.fileUrl}`
-  window.open(url, '_blank')
-}
+// ================= 2. 官方文献加载逻辑 =================
+const searchKeyword = ref('')
+const resourceList = ref([])
 
-// 上传成功回调
-const handleUploadSuccess = (response) => {
-  if (response.code === 200) {
-    ElMessage.success('上传成功！')
-    dialogVisible.value = false // 关闭弹窗
-    fetchList() // 刷新列表
-  } else {
-    ElMessage.error(response.msg || '上传失败')
+const loadActiveLiteratures = async () => {
+  // 只请求 status = 1 (上架) 的文献
+  const res = await axios.get('http://localhost:8080/literature/list?status=1')
+  if (res.data.code === 200) {
+    resourceList.value = res.data.data
   }
 }
 
-// 上传失败回调
-const handleUploadError = () => {
-  ElMessage.error('上传出错，请检查网络或文件大小')
+// 暂未接入搜索接口，仅前端过滤演示
+const searchResources = () => {
+  if (!searchKeyword.value) {
+    loadActiveLiteratures()
+  } else {
+    resourceList.value = resourceList.value.filter(item => 
+      item.title.toLowerCase().includes(searchKeyword.value.toLowerCase()) || 
+      item.description.toLowerCase().includes(searchKeyword.value.toLowerCase())
+    )
+  }
 }
 
-// 工具函数：格式化文件大小 (Bytes -> KB/MB)
-const formatSize = (bytes) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+// --- 通用辅助函数 ---
+const goTarget = (url) => {
+  if (!url) return
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    window.open(url, '_blank')
+  } else {
+    router.push(url)
+  }
 }
 
-// 工具函数：简单格式化时间 (去掉 T 字符)
-const formatTime = (timeStr) => {
-  if (!timeStr) return ''
-  return timeStr.replace('T', ' ')
+const formatDate = (dateStr) => {
+  if (!dateStr) return ''
+  return dateStr.replace('T', ' ').substring(0, 10)
 }
 
 onMounted(() => {
-  fetchList()
+  loadActiveBanners()
+  loadActiveLiteratures() // 💡 页面加载时自动获取真实文献
 })
 </script>
 
 <style scoped>
-.header-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.literature-container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+.banner-section { margin-bottom: 40px; margin-top: 10px; }
+.carousel-content { position: relative; width: 100%; height: 100%; cursor: pointer; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+.carousel-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
+.carousel-content:hover .carousel-img { transform: scale(1.05); }
+.carousel-title { position: absolute; bottom: 0; left: 0; right: 0; padding: 15px 20px; background: linear-gradient(transparent, rgba(15, 23, 42, 0.95)); color: #f8fafc; font-family: monospace; font-weight: bold; font-size: 16px; letter-spacing: 1px; }
+:deep(.el-carousel__indicator.is-active button) { background-color: #3b82f6; width: 30px; }
+
+.square-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px dashed #334155; padding-bottom: 20px; }
+.page-title { color: #e2e8f0; font-family: monospace; font-size: 24px; margin: 0; }
+.prompt { color: #10b981; }
+.blink { animation: blinker 1s linear infinite; color: #3b82f6; }
+@keyframes blinker { 50% { opacity: 0; } }
+
+.search-box { width: 350px; }
+:deep(.geek-search-input .el-input__wrapper) { background-color: #1e293b; box-shadow: 0 0 0 1px #334155 inset; }
+:deep(.geek-search-input .el-input__inner) { color: #e2e8f0; font-family: monospace; }
+:deep(.geek-search-input .el-input-group__append) { background-color: #3b82f6; color: white; border: none; }
+
+.resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+.resource-card {
+  background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 24px; color: #94a3b8;
+  display: flex; flex-direction: column; justify-content: space-between; min-height: 180px;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
+.resource-card:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,0.2); border-color: #3b82f6; }
+.resource-card h3 { color: #f8fafc; margin-top: 0; font-size: 18px; margin-bottom: 12px; }
+.desc { flex-grow: 1; font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #334155; padding-top: 16px; }
+.date-text { font-size: 12px; color: #64748b; font-family: monospace; }
 </style>

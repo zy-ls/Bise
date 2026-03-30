@@ -5,6 +5,8 @@ import com.liutong.study.mapper.UserMapper;
 import com.liutong.study.service.IUserService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -16,5 +18,16 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
+
+
+    @Override
+    public List<Map<String, Object>> getActivityStats(Long userId) {
+        return baseMapper.getUserActivityStats(userId);
+    }
+
+    @Override
+    public List<Map<String, Object>> getRadarStats(Long userId) {
+        return baseMapper.getUserRadarStats(userId);
+    }
 
 }

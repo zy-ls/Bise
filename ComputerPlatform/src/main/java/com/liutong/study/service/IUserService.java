@@ -13,4 +13,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IUserService extends IService<User> {
 
+    java.util.List<java.util.Map<String, Object>> getActivityStats(Long userId);
+    java.util.List<java.util.Map<String, Object>> getRadarStats(Long userId);
+
 }

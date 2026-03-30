@@ -43,6 +43,15 @@
               <el-icon v-else><Star /></el-icon>
               <span>{{ isCollected ? 'Collected' : 'Collect' }}</span>
             </el-button>
+
+            <el-button 
+              class="geek-btn report-btn" 
+              type="danger"
+              plain 
+              @click="reportDialogVisible = true"
+            >
+              <el-icon><Warning /></el-icon> <span>Report (举报)</span>
+            </el-button>
           </div>
         </div>
       </header>
@@ -94,8 +103,25 @@
           </div>
         </div>
       </section>
-
     </article>
+
+    <el-dialog v-model="reportDialogVisible" title=">_ Submit Report / 提交举报工单" width="400px" custom-class="geek-dialog">
+      <div class="dialog-body">
+        <label class="geek-label" style="color: #10b981; font-family: monospace; font-weight: bold;">Select Reason (选择违规类型) :</label>
+        <el-select v-model="reportForm.reason" placeholder="请选择违规原因" style="width: 100%; margin-top: 10px;">
+          <el-option label="广告营销 / 垃圾信息" value="广告营销" />
+          <el-option label="色情低俗 / 暴力血腥" value="色情低俗" />
+          <el-option label="政治敏感 / 违法违规" value="政治敏感" />
+          <el-option label="抄袭侵权 / 盗用他人内容" value="抄袭侵权" />
+          <el-option label="其他违规行为" value="其他违规" />
+        </el-select>
+      </div>
+      <template #footer>
+        <el-button class="geek-btn cancel-btn" @click="reportDialogVisible = false">ABORT</el-button>
+        <el-button type="danger" class="geek-btn confirm-btn" @click="submitReport">EXECUTE (提交)</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -107,6 +133,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { ChatDotRound, Star, StarFilled } from '@element-plus/icons-vue'
+import { Warning } from '@element-plus/icons-vue' 
 
 const route = useRoute()
 const router = useRouter()
@@ -200,6 +227,41 @@ onMounted(() => {
     checkCollectStatus()
   }
 })
+
+
+// ================= 🚨 举报风控系统逻辑 =================
+const reportDialogVisible = ref(false)
+const reportForm = ref({
+  reason: ''
+})
+
+const submitReport = async () => {
+  if (!reportForm.value.reason) {
+    return ElMessage.warning('System Warning: 请先选择一项违规原因！')
+  }
+  
+  try {
+    // 假设你页面上存文章数据的变量叫 note，获取它的 noteId
+    const currentNoteId = note.value.noteId || route.query.id 
+    
+    const res = await axios.post('http://localhost:8080/report/submit', {
+      noteId: currentNoteId,
+      reporterId: userStore.user.userId,
+      reason: reportForm.value.reason
+    })
+    
+    if (res.data.code === 200) {
+      ElMessage.success('Process finished: ' + res.data.data)
+      reportDialogVisible.value = false
+      reportForm.value.reason = '' // 清空表单
+    } else {
+      ElMessage.error(res.data.msg)
+    }
+  } catch (e) {
+    ElMessage.error('网络异常，工单提交失败')
+  }
+}
+
 </script>
 
 <style scoped>

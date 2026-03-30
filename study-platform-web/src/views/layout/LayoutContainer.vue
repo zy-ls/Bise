@@ -37,11 +37,23 @@
         </el-menu>
 
         <div class="user-actions">
+          
           <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0" class="msg-badge">
             <div class="action-btn" @click="$router.push('/chat')" title="消息中心">
               <el-icon :size="20"><ChatDotRound /></el-icon>
             </div>
           </el-badge>
+          
+          <el-button 
+          v-if="userStore.user.role === 'ADMIN'" 
+          type="danger" 
+          plain 
+          class="geek-admin-btn"
+          @click="router.push('/admin')"
+          style="margin-right: 15px; font-family: monospace; font-weight: bold;"
+        >
+          <el-icon><Monitor /></el-icon> [ ROOT_CONSOLE ]
+        </el-button>
 
           <el-dropdown @command="handleCommand" trigger="click">
             <div class="avatar-wrapper">

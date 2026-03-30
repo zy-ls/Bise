@@ -5,22 +5,21 @@ import com.liutong.study.common.Result;
 import com.liutong.study.entity.User;
 import com.liutong.study.service.IUserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * 用户控制器
  */
 @RestController
-@RequestMapping("/sys-user") // 注意：CodeGenerator 生成的路径可能是 /sys-user
+@RequestMapping("/sys-user") // 注意这里的路径是 sys-user
 public class UserController {
 
     @Autowired
     private IUserService userService;
 
-    /**
-     * 登录接口 (保留之前的)
-     */
     @PostMapping("/login")
     public Result<User> login(@RequestBody User user) {
         QueryWrapper<User> wrapper = new QueryWrapper<>();
@@ -33,29 +32,47 @@ public class UserController {
         return Result.error("账号或密码错误");
     }
 
-    /**
-     * 🆕 更新个人信息 (昵称、邮箱、头像)
-     */
     @PostMapping("/update")
     public Result<User> updateInfo(@RequestBody User user) {
-        // 出于安全，防止用户恶意篡改用户名或密码，这里强制设为null(MyBatisPlus更新时会忽略null字段)
-        // 如果你想允许改密码，需要单独写改密码接口
         user.setUsername(null);
         user.setPassword(null);
-
         boolean success = userService.updateById(user);
         if (success) {
-            // 更新成功后，查出最新的数据返回给前端更新缓存
             return Result.success(userService.getById(user.getUserId()));
         }
         return Result.error("修改失败");
     }
 
-    /**
-     * 🆕 获取当前用户信息
-     */
     @GetMapping("/info/{id}")
     public Result<User> getUserInfo(@PathVariable Long id) {
         return Result.success(userService.getById(id));
+    }
+
+    // ================== 下面是补上的两个统计大屏图表接口 ==================
+
+    /**
+     * 获取用户 365 天活跃度贡献图数据
+     */
+    @GetMapping("/stats/activity")
+    public Result<List<Map<String, Object>>> getActivityStats(@RequestParam Long userId) {
+        return Result.success(userService.getActivityStats(userId));
+    }
+
+    /**
+     * 获取用户能力雷达图数据 (附带数据转化算法)
+     */
+    @GetMapping("/stats/radar")
+    public Result<List<Map<String, Object>>> getRadarStats(@RequestParam Long userId) {
+        List<Map<String, Object>> rawStats = userService.getRadarStats(userId);
+
+        // 极客算法：将普通的“发帖数量”转化为 100分制的“能力评分”
+        for (Map<String, Object> stat : rawStats) {
+            // 获取数据库返回的 count
+            long count = ((Number) stat.get("count")).longValue();
+            // 评分公式：基础分 20 + 每发一篇笔记加 15 分，最高不超过 100 分
+            long score = Math.min(100L, 20L + (count * 15L));
+            stat.put("value", score);
+        }
+        return Result.success(rawStats);
     }
 }
