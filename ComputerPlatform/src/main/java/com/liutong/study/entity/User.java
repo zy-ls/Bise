@@ -58,4 +58,8 @@ public class User implements Serializable {
     @ApiModelProperty("注册时间")
     @TableField("create_time")
     private LocalDateTime createTime;
+
+    @ApiModelProperty("账号状态: 0-封禁, 1-正常")
+    @TableField("status")
+    private Integer status;
 }
