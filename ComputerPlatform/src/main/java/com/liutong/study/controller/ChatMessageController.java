@@ -88,8 +88,7 @@ public class  ChatMessageController {
     }
 
     /**
-     * 📨 发送消息
-     * API: POST /chat/send
+     * 📨 发送消息 (WebSocket 升级版)
      */
     @PostMapping("/send")
     public Result<String> sendMessage(@RequestBody ChatMessage message) {
@@ -99,17 +98,16 @@ public class  ChatMessageController {
         message.setCreateTime(LocalDateTime.now());
         message.setIsRead((byte) 0);
         boolean success = chatMessageService.save(message);
-        return success ? Result.success("发送成功") : Result.error("发送失败");
-    }
 
-    @GetMapping("/unreadCount")
-    public Result<Long> getUnreadCount(@RequestParam Long userId) {
-        QueryWrapper<ChatMessage> queryWrapper = new QueryWrapper<>();
-        // 查询条件：接收者是当前用户，且状态为 0（未读）
-        queryWrapper.eq("receiver_id", userId).eq("is_read", 0);
-
-        long count = chatMessageService.count(queryWrapper);
-        return Result.success(count);
+        if (success) {
+            // ================= 💡 核心新增 =================
+            // 消息存入数据库后，立刻通过 WebSocket 高速通道唤醒对方！
+            // 向接收方发送一个信号 "NEW_MSG"
+            com.liutong.study.config.WebSocketServer.sendMessageToUser(message.getReceiverId(), "NEW_MSG");
+            // ===============================================
+            return Result.success("发送成功");
+        }
+        return Result.error("发送失败");
     }
 
     /**

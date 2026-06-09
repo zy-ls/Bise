@@ -14,7 +14,7 @@ import java.util.Collections;
 public class CodeGenerator {
 
     public static void main(String[] args) {
-        // 1. 数据库配置 (请修改为你的 MySQL 密码)
+        // 1. 数据库配置
         String url = "jdbc:mysql://localhost:3306/study-platform?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai";
         String username = "root";
         String password = "Goodluck0808."; // TODO: 修改成你的数据库密码

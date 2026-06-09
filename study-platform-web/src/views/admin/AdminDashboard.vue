@@ -58,14 +58,49 @@
       </header>
 
       <div class="dashboard-content">
-        <div v-if="activeMenu === 'dashboard'">
+        <div v-if="activeMenu === 'dashboard'" class="fade-in">
           <div class="stats-grid">
-            <div class="stat-card"><div class="stat-icon blue"><el-icon><UserFilled /></el-icon></div><div class="stat-info"><div class="label">Total Nodes</div><div class="value">{{ stats.totalUsers }}</div></div></div>
-            <div class="stat-card"><div class="stat-icon purple"><el-icon><Connection /></el-icon></div><div class="stat-info"><div class="label">Active Hubs</div><div class="value">{{ stats.totalGroups }}</div></div></div>
-            <div class="stat-card"><div class="stat-icon green"><el-icon><Document /></el-icon></div><div class="stat-info"><div class="label">Public Data</div><div class="value">{{ stats.totalNotes }}</div></div></div>
-            <div class="stat-card warning-card" :class="{'has-warning': stats.pendingAudits > 0}"><div class="stat-icon red"><el-icon><BellFilled /></el-icon></div><div class="stat-info"><div class="label">Pending Audits</div><div class="value">{{ stats.pendingAudits }}</div></div></div>
+            <div class="stat-card"><div class="stat-icon blue"><el-icon><UserFilled /></el-icon></div><div class="stat-info"><div class="label">Total Nodes (总用户)</div><div class="value">{{ stats.totalUsers }}</div></div></div>
+            <div class="stat-card"><div class="stat-icon purple"><el-icon><Connection /></el-icon></div><div class="stat-info"><div class="label">Active Hubs (总圈子)</div><div class="value">{{ stats.totalGroups }}</div></div></div>
+            <div class="stat-card"><div class="stat-icon green"><el-icon><Document /></el-icon></div><div class="stat-info"><div class="label">Public Data (公开笔记)</div><div class="value">{{ stats.totalNotes }}</div></div></div>
+            <div class="stat-card warning-card" :class="{'has-warning': stats.pendingAudits > 0}"><div class="stat-icon red"><el-icon><BellFilled /></el-icon></div><div class="stat-info"><div class="label">Pending Audits (待审批)</div><div class="value">{{ stats.pendingAudits }}</div></div></div>
           </div>
-          <div class="chart-container"><div class="chart-header"><h3><el-icon><TrendCharts /></el-icon> 7-Day Global Data Ingestion</h3></div><div ref="trendChartRef" class="trend-chart"></div></div>
+          
+          <div class="dashboard-panels">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3><el-icon><Clock /></el-icon> 最新系统审计流 (Audit Trace)</h3>
+              </div>
+              <el-table :data="auditLogList.slice(0, 5)" class="geek-table" size="small">
+                <el-table-column prop="logId" label="日志 ID" width="80" />
+                <el-table-column label="操作结果" width="100">
+                  <template #default="scope">
+                    <span :class="scope.row.auditResult === 1 ? 'text-green' : 'text-red'">{{ scope.row.auditResult === 1 ? 'PASS (通过)' : 'REJECT (驳回)' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="时间" show-overflow-tooltip>
+                  <template #default="scope">{{ formatAuditTime(scope.row.auditTime) }}</template>
+                </el-table-column>
+              </el-table>
+              <div v-if="auditLogList.length === 0" class="empty-panel">暂无系统操作记录</div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3><el-icon><Warning /></el-icon> 实时违规阻断队列 (Pending)</h3>
+              </div>
+              <el-table :data="reportList.filter(r => r.status === 0).slice(0, 5)" class="geek-table" size="small">
+                <el-table-column prop="reportId" label="工单 ID" width="80" />
+                <el-table-column prop="reason" label="被举报原因" show-overflow-tooltip />
+                <el-table-column label="快捷操作" width="100">
+                  <template #default="scope">
+                    <el-button type="text" style="color: #ef4444; font-weight: bold;" @click="activeMenu='audit'">去处理 ➜</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-if="reportList.filter(r => r.status === 0).length === 0" class="empty-panel">当前无待处理工单，系统安全稳定。</div>
+            </div>
+          </div>
         </div>
 
         <div v-else-if="activeMenu === 'resource_upload'" class="module-container fade-in">
@@ -175,20 +210,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue' // 💡 移除了 echarts
 import { useRouter } from 'vue-router'
 import axios from 'axios'
-import * as echarts from 'echarts'
-import { DataLine, Back, UserFilled, Connection, Document, BellFilled, TrendCharts, Filter, Picture, Plus, Upload, User, Notification, Search, Collection, Clock } from '@element-plus/icons-vue'
+import { DataLine, Back, UserFilled, Connection, Document, BellFilled, Filter, Picture, Plus, Upload, User, Notification, Search, Collection, Clock, Warning } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const currentTime = ref(new Date().toLocaleTimeString())
-let timer = setInterval(() => { currentTime.value = new Date().toLocaleTimeString() }, 1000)
+setInterval(() => { currentTime.value = new Date().toLocaleTimeString() }, 1000)
 
 const activeMenu = ref('dashboard')
 const menuTitles = {
-  dashboard: 'Global Data Ingestion / 系统流量统计',
+  dashboard: 'Global Data Ingestion / 系统监控指挥中心',
   resource_upload: 'Literature Center / 官方文献管理',
   category: 'Category Router / 资源分类配置',
   banner_config: 'Resource Recommendation / 推荐位轮播图部署',
@@ -199,14 +233,13 @@ const menuTitles = {
   audit_log: 'Content Audit Trace / 笔记审核日志'
 }
 
-// ========== 💡 修复：内容审核记录逻辑 ==========
+// ========== 内容审核记录逻辑 ==========
 const auditLogList = ref([])
 const loadAuditLogs = async () => {
   const res = await axios.get('http://localhost:8080/auditLog/list')
   if (res.data.code === 200) auditLogList.value = res.data.data
 }
 
-// 专门适配 LocalDateTime 传到前端的问题
 const formatAuditTime = (time) => {
   if (!time) return '';
   if (Array.isArray(time)) {
@@ -234,9 +267,14 @@ const deleteCategory = async (id) => {
   if (res.data.code === 200) { ElMessage.success('分类已抹除'); loadSysCategories() }
 }
 
-// ========== 其他已有模块逻辑 (保持精简) ==========
-const stats = ref({ totalUsers: 0, totalGroups: 0, totalNotes: 0, pendingAudits: 0 }); const trendChartRef = ref(null); let trendChart = null;
-const loadAdminStats = async () => { try { const res = await axios.get('http://localhost:8080/admin/stats/overview'); if (res.data.code === 200) { Object.assign(stats.value, res.data.data); nextTick(() => { if (activeMenu.value === 'dashboard' && res.data.data.trendData) { /* chart init */ } }) } } catch (e) {} }
+// ========== 其他已有模块逻辑 ==========
+const stats = ref({ totalUsers: 0, totalGroups: 0, totalNotes: 0, pendingAudits: 0 }); 
+const loadAdminStats = async () => { 
+  try { 
+    const res = await axios.get('http://localhost:8080/admin/stats/overview'); 
+    if (res.data.code === 200) { Object.assign(stats.value, res.data.data); } 
+  } catch (e) {} 
+}
 
 const literatureList = ref([]); const litDialogVisible = ref(false); const litForm = ref({ title: '', description: '', targetUrl: '', status: 1 });
 const loadLiteratures = async () => { const res = await axios.get('http://localhost:8080/literature/list'); if (res.data.code === 200) literatureList.value = res.data.data }
@@ -250,7 +288,14 @@ const saveNewBanner = async () => { await saveBanner(bannerForm.value); bannerDi
 const saveBanner = async (banner) => { await axios.post('http://localhost:8080/banner/save', banner); loadBanners() }
 const deleteBanner = async (id) => { await axios.delete(`http://localhost:8080/banner/delete/${id}`); loadBanners() }
 
-const reportList = ref([]); const loadReports = async () => { const res = await axios.get('http://localhost:8080/report/list'); if (res.data.code === 200) { reportList.value = res.data.data; stats.value.pendingAudits = reportList.value.filter(r => r.status === 0).length } }
+const reportList = ref([]); 
+const loadReports = async () => { 
+  const res = await axios.get('http://localhost:8080/report/list'); 
+  if (res.data.code === 200) { 
+    reportList.value = res.data.data; 
+    stats.value.pendingAudits = reportList.value.filter(r => r.status === 0).length 
+  } 
+}
 const handleReport = async (report, targetStatus) => { await axios.post(`http://localhost:8080/report/process?reportId=${report.reportId}&status=${targetStatus}&noteId=${report.noteId}`); loadReports(); loadAdminStats() }
 
 const sensitiveWords = ref([]); const newWord = ref(''); const loadWords = async () => { const res = await axios.get('http://localhost:8080/admin/word/list'); if (res.data.code === 200) sensitiveWords.value = res.data.data }
@@ -277,12 +322,11 @@ onMounted(() => {
   loadUsers()
   loadAnnouncements()
   loadSysCategories() 
-  loadAuditLogs() // 💡 触发拉取内容审核日志
+  loadAuditLogs() 
 })
 </script>
 
 <style scoped>
-/* -------- UI 代码保持一致，无删减 -------- */
 .admin-layout { display: flex; height: 100vh; width: 100vw; background-color: #0f172a; color: #e2e8f0; font-family: monospace; overflow: hidden; }
 .admin-sidebar { width: 260px; background-color: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; }
 .brand { padding: 24px; border-bottom: 1px solid #334155; }
@@ -304,8 +348,11 @@ onMounted(() => {
 .pulse-dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse 2s infinite; }
 .dashboard-content { padding: 32px; }
 .module-container { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; min-height: 500px; }
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px; }
-.stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; }
+
+/* 核心统计卡片 */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 24px; }
+.stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; transition: transform 0.2s;}
+.stat-card:hover { transform: translateY(-2px); border-color: #475569; }
 .stat-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 28px; }
 .stat-icon.blue { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
 .stat-icon.purple { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
@@ -313,8 +360,16 @@ onMounted(() => {
 .stat-icon.red { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 .stat-info .label { color: #94a3b8; font-size: 13px; margin-bottom: 8px; }
 .stat-info .value { color: #f8fafc; font-size: 28px; font-weight: bold; }
-.chart-container { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; }
-.trend-chart { width: 100%; height: 350px; }
+
+/* 💡 新增：下方双面板布局 */
+.dashboard-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;}
+.panel-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; min-height: 300px; }
+.panel-header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px dashed #334155; }
+.panel-header h3 { display: flex; align-items: center; gap: 10px; font-size: 16px; color: #f8fafc; margin: 0; }
+.empty-panel { color: #64748b; font-size: 14px; text-align: center; margin-top: 40px; font-style: italic; }
+.text-green { color: #10b981; font-weight: bold; }
+.text-red { color: #ef4444; font-weight: bold; }
+
 .tag-pending { color: #eab308; background: rgba(234, 179, 8, 0.1); padding: 4px 8px; border-radius: 4px; font-size: 12px;}
 .tag-banned { color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 4px 8px; border-radius: 4px; font-size: 12px;}
 .tag-rejected { color: #94a3b8; background: rgba(148, 163, 184, 0.1); padding: 4px 8px; border-radius: 4px; font-size: 12px;}
@@ -326,11 +381,14 @@ onMounted(() => {
 .geek-btn { border-radius: 8px; }
 .inject-btn { background: #3b82f6; border: none; color: white;}
 .word-tags-pool { display: flex; flex-wrap: wrap; gap: 12px; padding: 20px; background: #0f172a; border-radius: 8px; border: 1px dashed #334155; min-height: 200px; align-content: flex-start; }
+
+/* Element Plus 表格深度定制 */
 :deep(.el-table) { background-color: transparent !important; color: #cbd5e1 !important; border-radius: 12px;}
 :deep(.el-table th.el-table__cell) { background-color: #0f172a !important; color: #3b82f6 !important; border-bottom: 1px solid #334155 !important; }
 :deep(.el-table tr) { background-color: transparent !important; }
 :deep(.el-table td.el-table__cell) { border-bottom: 1px solid #334155 !important; }
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) { background-color: rgba(59, 130, 246, 0.1) !important; }
+
 .fade-in { animation: fadeIn 0.3s ease-in; }
 @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.5); } 100% { opacity: 1; transform: scale(1); } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

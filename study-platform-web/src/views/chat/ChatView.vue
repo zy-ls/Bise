@@ -57,7 +57,12 @@
               class="message-wrapper"
               :class="{ 'is-me': msg.senderId === myUserId }"
             >
-              <el-avatar v-if="msg.senderId !== myUserId" :size="36" :src="currentChatUser.avatar" class="msg-avatar" />
+              <el-avatar 
+                v-if="msg.senderId !== myUserId" 
+                :size="40" 
+                :src="currentChatUser.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
+                class="msg-avatar" 
+              />
               
               <div class="bubble-container">
                 <div class="bubble">
@@ -65,7 +70,12 @@
                 </div>
               </div>
 
-              <el-avatar v-if="msg.senderId === myUserId" :size="36" :src="userStore.user.avatar" class="msg-avatar" />
+              <el-avatar 
+                v-if="msg.senderId === myUserId" 
+                :size="40" 
+                :src="userStore.user.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
+                class="msg-avatar" 
+              />
             </div>
           </div>
 
@@ -100,7 +110,7 @@ import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const userStore = useUserStore()
-const myUserId = userStore.user.userId
+const myUserId = userStore.user.userId || userStore.user.id // 兼容写法
 
 const contacts = ref([])          
 const currentChatUser = ref(null) 
@@ -108,7 +118,7 @@ const messageList = ref([])
 const inputContent = ref('')      
 const msgListRef = ref(null)      
 
-let timer = null 
+let ws = null // 💡 用 WebSocket 实例替代了之前的 timer 定时器
 
 // 🔥 清除未读红点，并立刻通知导航栏刷新
 const clearUnreadDot = () => {
@@ -189,6 +199,40 @@ const scrollToBottom = () => {
   })
 }
 
+// ================= 💡 WebSocket 核心逻辑 =================
+const initWebSocket = () => {
+  if (!myUserId) return
+  
+  // 建立 WSS 加密通道长连接
+  ws = new WebSocket(`ws://localhost:8080/ws/chat/${myUserId}`)
+  
+  ws.onopen = () => {
+    console.log(`>_ [WSS] Secure Channel Established for Node [${myUserId}].`)
+  }
+  
+  ws.onmessage = (event) => {
+    // 监听后端枢纽发来的敲门信号
+    if (event.data === 'NEW_MSG') {
+      console.log('>_ [WSS] Signal Received: 收到新消息，正在重载面板...')
+      // 如果正处于聊天界面，立刻刷新聊天记录
+      if (currentChatUser.value) {
+        loadHistory() 
+      }
+      loadContacts()    // 刷新左侧联系人列表，让新发消息的人排上来
+      clearUnreadDot()  // 抹除红点
+    }
+  }
+  
+  ws.onclose = () => {
+    console.log('>_ [WSS] Connection Terminated. 链路已断开。')
+  }
+  
+  ws.onerror = () => {
+    console.error('>_ [WSS] Fatal Error: 链路异常！')
+  }
+}
+// =========================================================
+
 onMounted(async () => {
   clearUnreadDot()
   await loadContacts()
@@ -209,16 +253,15 @@ onMounted(async () => {
     }
   }
 
-  timer = setInterval(() => {
-    if (currentChatUser.value) {
-      loadHistory()
-      clearUnreadDot() 
-    }
-  }, 1500)
+  // 🚀 启动 WebSocket 雷达监听！
+  initWebSocket()
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  // 组件销毁时拔掉网线，释放服务器内存
+  if (ws) {
+    ws.close()
+  }
 })
 </script>
 
@@ -347,7 +390,7 @@ onUnmounted(() => {
 .target-name { color: #0f172a; font-weight: bold; }
 .protocol-text { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #94a3b8; }
 
-/* 消息流 */
+/* ================= 消息流与气泡优化 ================= */
 .message-list {
   flex: 1;
   padding: 24px;
@@ -359,38 +402,65 @@ onUnmounted(() => {
 .message-list::-webkit-scrollbar { width: 6px; }
 .message-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
+/* 单条消息外层容器 */
 .message-wrapper {
   display: flex;
   margin-bottom: 24px;
-  align-items: flex-start;
+  align-items: flex-start; /* 顶部对齐 */
+  width: 100%;
   animation: slideUp 0.3s ease-out;
 }
-.msg-avatar { border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin: 0 12px; }
 
-.bubble {
-  background-color: #ffffff;
-  color: #334155;
-  padding: 12px 16px;
-  border-radius: 2px 12px 12px 12px; /* 极客风：左上角直角 */
-  font-size: 14px;
-  line-height: 1.6;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  border: 1px solid #e2e8f0;
-  max-width: 500px;
-  word-break: break-all;
+/* 💡 核心修复：把反转去掉了，直接让我的消息靠右对齐 */
+.is-me {
+  justify-content: flex-end;
 }
 
-/* 我的消息 */
-.is-me { flex-direction: row-reverse; }
+/* 头像防挤压 */
+.msg-avatar {
+  flex-shrink: 0; 
+  margin: 0 12px;
+  border: 1px solid #e2e8f0;
+  background-color: #fff;
+}
+
+/* 气泡容器：限制最大宽度，防止文字太长撑满屏幕 */
+.bubble-container {
+  display: flex;
+  flex-direction: column;
+  max-width: 65%;
+}
+
+.is-me .bubble-container {
+  align-items: flex-end; /* 我的文字在容器内靠右 */
+}
+
+/* 气泡本体样式 */
+.bubble {
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: break-word; /* 💡 修复文字越界：让长中英文正常换行 */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* 对方的气泡（白色，左上角直角） */
+.message-wrapper:not(.is-me) .bubble {
+  background-color: #ffffff;
+  color: #334155;
+  border-radius: 4px 16px 16px 16px;
+  border: 1px solid #e2e8f0;
+}
+
+/* 我的气泡（蓝色，右上角直角） */
 .is-me .bubble {
   background-color: #3b82f6;
   color: #ffffff;
+  border-radius: 16px 4px 16px 16px;
   border: none;
-  border-radius: 12px 2px 12px 12px; /* 右上角直角 */
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
-/* 底部输入区 */
+/* ================= 底部输入区 ================= */
 .chat-input-area {
   padding: 16px 24px;
   background: #ffffff;
